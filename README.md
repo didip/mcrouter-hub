@@ -8,16 +8,14 @@ An HTTP companion to Facebook's McRouter. It performs CRUD operation on McRouter
 
 The daemon has 2 mode: agent and central.
 
-While in agent mode, and if central URL is provided, mcrouter-hub gathers configuration data and reports it to central.
-
-Here's how to run the agent mode:
+While in agent mode, and if central URL is provided, mcrouter-hub gathers configuration data and reports it to central. Here's how to run the agent mode:
 ```
-MCROUTER_CONFIG_FILE=./tests/mcrouter.json MCRHUB_CENTRAL_URL=http://localhost:5002 /path/to/mcrouter-hub
+MCROUTER_CONFIG_FILE=./tests/mcrouter.json \
+MCRHUB_CENTRAL_URL=http://localhost:5002 \
+/path/to/mcrouter-hub
 ```
 
-While in central mode, mcrouter-hub receives configuration data from individual McRouter host and performs CRUD operations on them.
-
-Here's how to run the central mode:
+While in central mode, mcrouter-hub receives configuration data from individual McRouter host and performs CRUD operations on them. Here's how to run the central mode:
 ```
 /path/to/mcrouter-hub
 ```
@@ -26,7 +24,7 @@ Here's how to run the central mode:
 
 mcrouter-hub uses environment variables as configuration:
 
-* **MCROUTER_CONFIG_FILE:** Path McRouter config file (Required).
+* **MCROUTER_CONFIG_FILE:** Path to McRouter config file (Required).
 
 * **MCRHUB_CENTRAL_URL:** URL to mcrouter-hub central. Default: ""
 
