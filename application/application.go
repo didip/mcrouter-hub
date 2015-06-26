@@ -77,5 +77,7 @@ func (app *Application) mux() *mux.Router {
 	router.HandleFunc("/config", handlers.GetConfig).Methods("GET")
 	router.HandleFunc("/config", handlers.PostConfig).Methods("POST")
 
+	router.HandleFunc("/config/pools", handlers.GetConfigPools).Methods("GET")
+
 	return router
 }
