@@ -1,12 +1,12 @@
 package main
 
 import (
+	"errors"
 	"github.com/Sirupsen/logrus"
+	"github.com/didip/mcrouter-hub/application"
 	"net/http"
 	"os"
 	"runtime"
-
-	"github.com/didip/mcrouter-hub/application"
 )
 
 func init() {
@@ -27,6 +27,11 @@ func main() {
 	configFile := os.Getenv("MCROUTER_CONFIG_FILE")
 	mcRouterHubCentralURL := os.Getenv("MCRHUB_CENTRAL_URL")
 
+	if configFile == "" && mcRouterHubCentralURL != "" {
+		err := errors.New("MCROUTER_CONFIG_FILE is required.")
+		logrus.Fatal(err)
+	}
+
 	app, err := application.New(configFile, mcRouterHubCentralURL)
 	if err != nil {
 		logrus.Fatal(err)
@@ -38,10 +43,15 @@ func main() {
 	}
 
 	app.WatchMcRounterConfigFile()
+	app.ReportToCentral()
 
 	httpAddr := os.Getenv("MCRHUB_ADDR")
 	if httpAddr == "" {
-		httpAddr = ":5001"
+		if app.IsCentral() {
+			httpAddr = ":5002"
+		} else {
+			httpAddr = ":5001"
+		}
 	}
 
 	httpsCertFile := os.Getenv("MCRHUB_CERT_FILE")
