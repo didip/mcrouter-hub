@@ -2,11 +2,11 @@ package main
 
 import (
 	"errors"
-	"github.com/Sirupsen/logrus"
-	"github.com/didip/mcrouter-hub/application"
 	"net/http"
 	"os"
-	"runtime"
+
+	"github.com/Sirupsen/logrus"
+	"github.com/didip/mcrouter-hub/application"
 )
 
 func init() {
@@ -22,17 +22,28 @@ func init() {
 
 // main runs the web server for resourced.
 func main() {
-	runtime.GOMAXPROCS(runtime.NumCPU())
-
-	configFile := os.Getenv("MCROUTER_CONFIG_FILE")
+	mcRouterAddr := os.Getenv("MCROUTER_ADDR")
+	mcRouterConfigFile := os.Getenv("MCROUTER_CONFIG_FILE")
 	mcRouterHubCentralURL := os.Getenv("MCRHUB_CENTRAL_URL")
+	mcRouterHubReadOnlyString := os.Getenv("MCRHUB_READ_ONLY")
 
-	if configFile == "" && mcRouterHubCentralURL != "" {
+	mcRouterHubReadOnly := true
+	if mcRouterHubReadOnlyString == "false" {
+		mcRouterHubReadOnly = false
+	}
+
+	if mcRouterConfigFile == "" && mcRouterHubCentralURL != "" {
 		err := errors.New("MCROUTER_CONFIG_FILE is required.")
 		logrus.Fatal(err)
 	}
 
-	app, err := application.New(configFile, mcRouterHubCentralURL)
+	nrInsightsURL := os.Getenv("NR_INSIGHTS_URL")
+	if nrInsightsURL == "" {
+		nrInsightsURL = "https://insights-collector.newrelic.com/v1/accounts/1/events"
+	}
+	nrInsightsInsertKey := os.Getenv("NR_INSIGHTS_INSERT_KEY")
+
+	app, err := application.New(mcRouterHubReadOnly, mcRouterConfigFile, mcRouterAddr, mcRouterHubCentralURL, nrInsightsURL, nrInsightsInsertKey)
 	if err != nil {
 		logrus.Fatal(err)
 	}
@@ -42,8 +53,9 @@ func main() {
 		logrus.Fatal(err)
 	}
 
-	app.WatchMcRounterConfigFile()
+	app.CollectData()
 	app.ReportToCentral()
+	app.ReportToNewrelicInsights()
 
 	httpAddr := os.Getenv("MCRHUB_ADDR")
 	if httpAddr == "" {

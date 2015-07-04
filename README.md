@@ -24,7 +24,14 @@ While in central mode, mcrouter-hub receives configuration data from individual 
 
 mcrouter-hub uses environment variables as configuration:
 
+### Required
+
 * **MCROUTER_CONFIG_FILE:** Path to McRouter config file (Required).
+
+
+### Optional
+
+* **MCRHUB_READ_ONLY:** Read only flag. Default: true
 
 * **MCRHUB_CENTRAL_URL:** URL to mcrouter-hub central. Default: ""
 
@@ -36,3 +43,9 @@ mcrouter-hub uses environment variables as configuration:
 
 * **MCRHUB_KEY_FILE:** Path to key file. Default: ""
 
+
+### Newrelic Insights
+
+* **NR_INSIGHTS_URL:** Newrelic Insights endpoint. Default: "https://insights-collector.newrelic.com/v1/accounts/1/events"
+
+* **NR_INSIGHTS_INSERT_KEY:** Newrelic Insights insert key. Default: ""
