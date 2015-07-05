@@ -16,7 +16,8 @@ func CentralGetRoot(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{
     paths: {
         GET: [
-            "/configs"
+            "/configs",
+            "/stats"
         ]
     }
 }`))
@@ -25,10 +26,12 @@ func CentralGetRoot(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{
     paths: {
         GET: [
-            "/configs"
+            "/configs",
+            "/stats"
         ],
         POST: [
-            "/configs"
+            "/configs",
+            "/stats"
         ]
     }
 }`))
