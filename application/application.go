@@ -258,40 +258,55 @@ func (app *Application) ReportConfigToCentral() error {
 
 		go func() {
 			for {
-				configInterface := app.Storage.Get("config")
-				if configInterface == nil {
-					time.Sleep(duration)
-					continue
+				tokens := app.Tokens()
+
+				run := func(token string) error {
+					configInterface := app.Storage.Get("config")
+					if configInterface == nil {
+						return err
+					}
+
+					config := configInterface.(map[string]interface{})
+
+					payload := &payloads.ReportConfigToCentralPayload{Hostname: hostname, Config: config}
+
+					payloadJson, err := json.Marshal(payload)
+
+					req, err := http.NewRequest("POST", url, bytes.NewReader(payloadJson))
+					if err != nil {
+						logrus.WithFields(logrus.Fields{
+							"Error": err.Error(),
+						}).Error("Failed to create HTTP request struct")
+
+						return err
+					}
+
+					req.Header.Set("Content-Type", "application/json")
+
+					if token != "" {
+						req.SetBasicAuth(token, "")
+					}
+
+					resp, err := client.Do(req)
+					if err != nil {
+						logrus.WithFields(logrus.Fields{
+							"Error": err.Error(),
+						}).Error("Failed to send HTTP request")
+
+						return err
+					}
+
+					defer resp.Body.Close()
+					return nil
 				}
-				config := configInterface.(map[string]interface{})
 
-				payload := &payloads.ReportConfigToCentralPayload{Hostname: hostname, Config: config}
-
-				payloadJson, err := json.Marshal(payload)
-
-				req, err := http.NewRequest("POST", url, bytes.NewReader(payloadJson))
-				if err != nil {
-					logrus.WithFields(logrus.Fields{
-						"Error": err.Error(),
-					}).Error("Failed to create HTTP request struct")
-
-					time.Sleep(duration)
-					continue
+				if len(tokens) == 0 {
+					run("")
+				} else {
+					for _, token := range tokens {
+						run(token)
+					}
 				}
-
-				req.Header.Set("Content-Type", "application/json")
-
-				resp, err := client.Do(req)
-				if err != nil {
-					logrus.WithFields(logrus.Fields{
-						"Error": err.Error(),
-					}).Error("Failed to send HTTP request")
-
-					time.Sleep(duration)
-					continue
-				}
-
-				defer resp.Body.Close()
 
 				time.Sleep(duration)
 			}
@@ -323,46 +338,56 @@ func (app *Application) ReportStatsToCentral() error {
 
 		go func() {
 			for {
-				payload := app.GetStats()
-				if payload == nil {
-					logrus.Error("Failed to get stats")
-					time.Sleep(duration)
-					continue
+				tokens := app.Tokens()
+
+				run := func(token string) error {
+					payload := app.GetStats()
+					if payload == nil {
+						logrus.Error("Failed to get stats")
+						return nil
+					}
+
+					payloadJson, err := json.Marshal(payload)
+					if err != nil {
+						logrus.WithFields(logrus.Fields{
+							"Error": err.Error(),
+						}).Error("Failed to create marshal JSON")
+
+						return err
+					}
+
+					req, err := http.NewRequest("POST", url, bytes.NewReader(payloadJson))
+					if err != nil {
+						logrus.WithFields(logrus.Fields{
+							"Error": err.Error(),
+						}).Error("Failed to create HTTP request struct")
+
+						return err
+					}
+
+					req.Header.Set("Content-Type", "application/json")
+					req.SetBasicAuth(token, "")
+
+					resp, err := client.Do(req)
+					if err != nil {
+						logrus.WithFields(logrus.Fields{
+							"Error": err.Error(),
+						}).Error("Failed to send HTTP request")
+
+						return err
+					}
+
+					defer resp.Body.Close()
+					return nil
 				}
 
-				payloadJson, err := json.Marshal(payload)
-				if err != nil {
-					logrus.WithFields(logrus.Fields{
-						"Error": err.Error(),
-					}).Error("Failed to create marshal JSON")
-
-					time.Sleep(duration)
-					continue
+				if len(tokens) == 0 {
+					run("")
+				} else {
+					for _, token := range tokens {
+						run(token)
+					}
 				}
-
-				req, err := http.NewRequest("POST", url, bytes.NewReader(payloadJson))
-				if err != nil {
-					logrus.WithFields(logrus.Fields{
-						"Error": err.Error(),
-					}).Error("Failed to create HTTP request struct")
-
-					time.Sleep(duration)
-					continue
-				}
-
-				req.Header.Set("Content-Type", "application/json")
-
-				resp, err := client.Do(req)
-				if err != nil {
-					logrus.WithFields(logrus.Fields{
-						"Error": err.Error(),
-					}).Error("Failed to send HTTP request")
-
-					time.Sleep(duration)
-					continue
-				}
-
-				defer resp.Body.Close()
 
 				time.Sleep(duration)
 			}
@@ -463,7 +488,9 @@ func (app *Application) addAgentHandlers(router *mux.Router) *mux.Router {
 		router.HandleFunc("/stats", handlers.AgentGetStats).Methods("GET")
 
 		if !app.IsReadOnly() {
-			router.HandleFunc("/config", handlers.AgentPostConfig).Methods("POST")
+			MustLoginApi := middlewares.MustLoginApi
+
+			router.Handle("/config", MustLoginApi(http.HandlerFunc(handlers.AgentPostConfig))).Methods("POST")
 		}
 	}
 	return router
@@ -478,8 +505,10 @@ func (app *Application) addCentralHandlers(router *mux.Router) *mux.Router {
 		router.HandleFunc("/stats/{hostname}", handlers.CentralGetStatsHostname).Methods("GET")
 
 		if !app.IsReadOnly() {
-			router.HandleFunc("/configs", handlers.CentralPostConfigs).Methods("POST")
-			router.HandleFunc("/stats", handlers.CentralPostStats).Methods("POST")
+			MustLoginApi := middlewares.MustLoginApi
+
+			router.Handle("/configs", MustLoginApi(http.HandlerFunc(handlers.CentralPostConfigs))).Methods("POST")
+			router.Handle("/stats", MustLoginApi(http.HandlerFunc(handlers.CentralPostStats))).Methods("POST")
 		}
 	}
 	return router
