@@ -1,12 +1,17 @@
 package handlers
 
 import (
+	"encoding/json"
 	"errors"
-	"github.com/didip/mcrouter-hub/libhttp"
-	"github.com/didip/mcrouter-hub/models"
-	"github.com/gorilla/context"
 	"io/ioutil"
 	"net/http"
+	"os"
+	"strings"
+
+	"github.com/didip/mcrouter-hub/libhttp"
+	"github.com/didip/mcrouter-hub/models"
+	"github.com/fatih/structs"
+	"github.com/gorilla/context"
 )
 
 func AgentGetRoot(w http.ResponseWriter, r *http.Request) {
@@ -16,7 +21,8 @@ func AgentGetRoot(w http.ResponseWriter, r *http.Request) {
     paths: {
         GET: [
             "/config",
-            "/config/pools"
+            "/config/pools",
+            "/stats"
         ]
     }
 }`))
@@ -26,7 +32,8 @@ func AgentGetRoot(w http.ResponseWriter, r *http.Request) {
     paths: {
         GET: [
             "/config",
-            "/config/pools"
+            "/config/pools",
+            "/stats"
         ],
         POST: [
             "/config"
@@ -147,4 +154,42 @@ func AgentPostConfigPools(w http.ResponseWriter, r *http.Request) {
 	}
 
 	libhttp.HandleSuccessJson(w, "New config is saved successfully")
+}
+
+func AgentGetStats(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	statsInterface := context.Get(r, "stats")
+	if statsInterface == nil {
+		w.Write([]byte(`{}`))
+		return
+	}
+
+	stats := statsInterface.(*models.Stats)
+	payload := structs.Map(stats)
+
+	// Fetch the other stats data from file.
+	statsFromFileInterface := context.Get(r, "statsFromFile")
+
+	if statsFromFileInterface != nil {
+		statsFromFile := statsFromFileInterface.(map[string]interface{})
+
+		for key, value := range statsFromFile {
+			trimmedKey := strings.Replace(key, "libmcrouter.mcrouter.5000.", "", -1)
+			payload[trimmedKey] = value
+		}
+	}
+
+	hostname, err := os.Hostname()
+	if err == nil {
+		payload["hostname"] = hostname
+	}
+
+	payloadJson, err := json.Marshal(payload)
+	if err != nil {
+		libhttp.HandleErrorJson(w, err)
+		return
+	}
+
+	w.Write(payloadJson)
 }

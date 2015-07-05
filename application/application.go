@@ -417,6 +417,7 @@ func (app *Application) addAgentHandlers(router *mux.Router) *mux.Router {
 		router.HandleFunc("/", handlers.AgentGetRoot).Methods("GET")
 		router.HandleFunc("/config", handlers.AgentGetConfig).Methods("GET")
 		router.HandleFunc("/config/pools", handlers.AgentGetConfigPools).Methods("GET")
+		router.HandleFunc("/stats", handlers.AgentGetStats).Methods("GET")
 
 		if !app.IsReadOnly() {
 			router.HandleFunc("/config", handlers.AgentPostConfig).Methods("POST")
