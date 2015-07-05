@@ -433,7 +433,9 @@ func (app *Application) addCentralHandlers(router *mux.Router) *mux.Router {
 	if app.IsCentralMode() {
 		router.HandleFunc("/", handlers.CentralGetRoot).Methods("GET")
 		router.HandleFunc("/configs", handlers.CentralGetConfigs).Methods("GET")
+		router.HandleFunc("/configs/{hostname}", handlers.CentralGetConfigsHostname).Methods("GET")
 		router.HandleFunc("/stats", handlers.CentralGetStats).Methods("GET")
+		router.HandleFunc("/stats/{hostname}", handlers.CentralGetStatsHostname).Methods("GET")
 
 		if !app.IsReadOnly() {
 			router.HandleFunc("/configs", handlers.CentralPostConfigs).Methods("POST")

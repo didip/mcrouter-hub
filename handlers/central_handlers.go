@@ -2,12 +2,14 @@ package handlers
 
 import (
 	"encoding/json"
+	"io/ioutil"
+	"net/http"
+
 	"github.com/didip/mcrouter-hub/libhttp"
 	"github.com/didip/mcrouter-hub/payloads"
 	"github.com/didip/mcrouter-hub/storage"
 	"github.com/gorilla/context"
-	"io/ioutil"
-	"net/http"
+	"github.com/gorilla/mux"
 )
 
 func CentralGetRoot(w http.ResponseWriter, r *http.Request) {
@@ -17,7 +19,9 @@ func CentralGetRoot(w http.ResponseWriter, r *http.Request) {
     paths: {
         GET: [
             "/configs",
-            "/stats"
+            "/configs/:hostname",
+            "/stats",
+            "/stats/:hostname"
         ]
     }
 }`))
@@ -27,7 +31,9 @@ func CentralGetRoot(w http.ResponseWriter, r *http.Request) {
     paths: {
         GET: [
             "/configs",
-            "/stats"
+            "/configs/:hostname",
+            "/stats",
+            "/stats/:hostname"
         ],
         POST: [
             "/configs",
@@ -76,6 +82,28 @@ func CentralGetConfigs(w http.ResponseWriter, r *http.Request) {
 	w.Write(configs)
 }
 
+func CentralGetConfigsHostname(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	vars := mux.Vars(r)
+
+	store := context.Get(r, "store").(*storage.Storage)
+
+	configs := store.All("config:" + vars["hostname"])
+	if len(configs) == 0 {
+		w.Write([]byte(`{}`))
+		return
+	}
+
+	configJson, err := json.Marshal(configs[""])
+	if err != nil {
+		libhttp.HandleErrorJson(w, err)
+		return
+	}
+
+	w.Write(configJson)
+}
+
 func CentralPostStats(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -117,4 +145,26 @@ func CentralGetStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Write(stats)
+}
+
+func CentralGetStatsHostname(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	vars := mux.Vars(r)
+
+	store := context.Get(r, "store").(*storage.Storage)
+
+	stats := store.All("stats:" + vars["hostname"])
+	if len(stats) == 0 {
+		w.Write([]byte(`{}`))
+		return
+	}
+
+	statsJson, err := json.Marshal(stats[""])
+	if err != nil {
+		libhttp.HandleErrorJson(w, err)
+		return
+	}
+
+	w.Write(statsJson)
 }
