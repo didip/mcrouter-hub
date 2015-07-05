@@ -34,7 +34,8 @@ func (s *Storage) ToJson(prefix string) ([]byte, error) {
 
 	for key, value := range s.Data {
 		if strings.HasPrefix(key, prefix) {
-			newData[key] = value
+			newKey := strings.Replace(key, prefix, "", -1)
+			newData[newKey] = value
 		}
 	}
 	return json.Marshal(newData)
