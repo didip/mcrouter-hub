@@ -2,6 +2,7 @@ package storage
 
 import (
 	"encoding/json"
+	"strings"
 	"sync"
 )
 
@@ -28,6 +29,13 @@ func (s *Storage) Get(key string) interface{} {
 	return s.Data[key]
 }
 
-func (s *Storage) ToJson() ([]byte, error) {
-	return json.Marshal(s.Data)
+func (s *Storage) ToJson(prefix string) ([]byte, error) {
+	newData := make(map[string]interface{})
+
+	for key, value := range s.Data {
+		if strings.HasPrefix(key, prefix) {
+			newData[key] = value
+		}
+	}
+	return json.Marshal(newData)
 }
