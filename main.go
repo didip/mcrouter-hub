@@ -33,7 +33,8 @@ func main() {
 
 	app.CollectData()
 	app.ReportConfigToCentral()
-	app.ReportToNewrelicInsights()
+	app.ReportStatsToCentral()
+	app.ReportStatsToNewrelicInsights()
 
 	httpAddr := app.Settings["MCRHUB_ADDR"]
 	httpsCertFile := app.Settings["MCRHUB_CERT_FILE"]

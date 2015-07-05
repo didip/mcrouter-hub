@@ -130,6 +130,35 @@ func (app *Application) CentralURLs() []string {
 	return urls
 }
 
+func (app *Application) GetStats() map[string]interface{} {
+	statsInterface := app.Storage.Get("stats")
+	if statsInterface == nil {
+		return nil
+	}
+
+	stats := statsInterface.(*models.Stats)
+	payload := structs.Map(stats)
+
+	// Fetch the other stats data from file.
+	statsFromFileInterface := app.Storage.Get("statsFromFile")
+
+	if statsFromFileInterface != nil {
+		statsFromFile := statsFromFileInterface.(map[string]interface{})
+
+		for key, value := range statsFromFile {
+			trimmedKey := strings.Replace(key, "libmcrouter.mcrouter.5000.", "", -1)
+			payload[trimmedKey] = value
+		}
+	}
+
+	hostname, err := os.Hostname()
+	if err == nil {
+		payload["hostname"] = hostname
+	}
+
+	return payload
+}
+
 func (app *Application) CollectData() error {
 	if !app.IsAgentMode() {
 		return nil
@@ -161,6 +190,9 @@ func (app *Application) CollectData() error {
 
 func (app *Application) ReportConfigToCentral() error {
 	if !app.IsAgentMode() {
+		return nil
+	}
+	if len(app.CentralURLs()) == 0 {
 		return nil
 	}
 
@@ -226,7 +258,78 @@ func (app *Application) ReportConfigToCentral() error {
 	return nil
 }
 
-func (app *Application) ReportToNewrelicInsights() error {
+func (app *Application) ReportStatsToCentral() error {
+	if !app.IsAgentMode() {
+		return nil
+	}
+	if len(app.CentralURLs()) == 0 {
+		return nil
+	}
+
+	duration, err := time.ParseDuration(app.Settings["MCRHUB_REPORT_INTERVAL"])
+	if err != nil {
+		return err
+	}
+
+	client := &http.Client{}
+
+	for _, url := range app.CentralURLs() {
+		if !strings.HasSuffix(url, "/stats") {
+			url = url + "/stats"
+		}
+
+		go func() {
+			for {
+				payload := app.GetStats()
+				if payload == nil {
+					logrus.Error("Failed to get stats")
+					time.Sleep(duration)
+					continue
+				}
+
+				payloadJson, err := json.Marshal(payload)
+				if err != nil {
+					logrus.WithFields(logrus.Fields{
+						"Error": err.Error(),
+					}).Error("Failed to create marshal JSON")
+
+					time.Sleep(duration)
+					continue
+				}
+
+				req, err := http.NewRequest("POST", url, bytes.NewReader(payloadJson))
+				if err != nil {
+					logrus.WithFields(logrus.Fields{
+						"Error": err.Error(),
+					}).Error("Failed to create HTTP request struct")
+
+					time.Sleep(duration)
+					continue
+				}
+
+				req.Header.Set("Content-Type", "application/json")
+
+				resp, err := client.Do(req)
+				if err != nil {
+					logrus.WithFields(logrus.Fields{
+						"Error": err.Error(),
+					}).Error("Failed to send HTTP request")
+
+					time.Sleep(duration)
+					continue
+				}
+
+				defer resp.Body.Close()
+
+				time.Sleep(duration)
+			}
+		}()
+	}
+
+	return nil
+}
+
+func (app *Application) ReportStatsToNewrelicInsights() error {
 	if app.Settings["NR_INSIGHTS_URL"] == "" || app.Settings["NR_INSIGHTS_INSERT_KEY"] == "" {
 		return nil
 	}
@@ -236,39 +339,28 @@ func (app *Application) ReportToNewrelicInsights() error {
 		return err
 	}
 
-	hostname, err := os.Hostname()
-	if err != nil {
-		return err
-	}
-
 	client := &http.Client{}
 
 	go func() {
 		for {
-			statsInterface := app.Storage.Get("stats")
-			if statsInterface == nil {
+			payload := app.GetStats()
+			if payload == nil {
+				logrus.Error("Failed to get stats")
 				time.Sleep(duration)
 				continue
 			}
-			stats := statsInterface.(*models.Stats)
 
-			payload := structs.Map(stats)
-			payload["hostname"] = hostname
 			payload["eventType"] = "McRouter"
 
-			// Fetch the other stats data from file.
-			statsFromFileInterface := app.Storage.Get("statsFromFile")
-
-			if statsFromFileInterface != nil {
-				statsFromFile := statsFromFileInterface.(map[string]interface{})
-
-				for key, value := range statsFromFile {
-					trimmedKey := strings.Replace(key, "libmcrouter.mcrouter.5000.", "", -1)
-					payload[trimmedKey] = value
-				}
-			}
-
 			payloadJson, err := json.Marshal(payload)
+			if err != nil {
+				logrus.WithFields(logrus.Fields{
+					"Error": err.Error(),
+				}).Error("Failed to create marshal JSON")
+
+				time.Sleep(duration)
+				continue
+			}
 
 			req, err := http.NewRequest("POST", app.Settings["NR_INSIGHTS_URL"], bytes.NewReader(payloadJson))
 			if err != nil {
@@ -337,9 +429,11 @@ func (app *Application) addCentralHandlers(router *mux.Router) *mux.Router {
 	if app.IsCentralMode() {
 		router.HandleFunc("/", handlers.CentralGetRoot).Methods("GET")
 		router.HandleFunc("/configs", handlers.CentralGetConfigs).Methods("GET")
+		router.HandleFunc("/stats", handlers.CentralGetStats).Methods("GET")
 
 		if !app.IsReadOnly() {
 			router.HandleFunc("/configs", handlers.CentralPostConfigs).Methods("POST")
+			router.HandleFunc("/stats", handlers.CentralPostStats).Methods("POST")
 		}
 	}
 	return router
