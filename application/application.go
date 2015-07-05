@@ -1,11 +1,14 @@
 package application
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
+	"io/ioutil"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -85,6 +88,7 @@ func (app *Application) SettingKeys() []string {
 		"MCRHUB_CENTRAL_URLS",
 		"MCRHUB_LOG_LEVEL",
 		"MCRHUB_REPORT_INTERVAL",
+		"MCRHUB_TOKENS_DIR",
 		"MCRHUB_ADDR",
 		"MCRHUB_CERT_FILE",
 		"MCRHUB_KEY_FILE",
@@ -128,6 +132,42 @@ func (app *Application) CentralURLs() []string {
 	}
 
 	return urls
+}
+
+func (app *Application) Tokens() []string {
+	tokens := make([]string, 0)
+
+	if app.Settings["MCRHUB_TOKENS_DIR"] == "" {
+		return tokens
+	}
+
+	app.Settings["MCRHUB_TOKENS_DIR"] = os.ExpandEnv(app.Settings["MCRHUB_TOKENS_DIR"])
+
+	fileInfos, err := ioutil.ReadDir(app.Settings["MCRHUB_TOKENS_DIR"])
+	if err != nil {
+		return tokens
+	}
+	for _, fileInfo := range fileInfos {
+		if !fileInfo.IsDir() {
+			fullpath := filepath.Join(app.Settings["MCRHUB_TOKENS_DIR"], fileInfo.Name())
+
+			file, err := os.Open(fullpath)
+			if err != nil {
+				continue
+			}
+			defer file.Close()
+
+			scanner := bufio.NewScanner(file)
+			for scanner.Scan() {
+				token := scanner.Text()
+				if token != "" {
+					tokens = append(tokens, token)
+				}
+			}
+		}
+	}
+
+	return tokens
 }
 
 func (app *Application) GetStats() map[string]interface{} {
