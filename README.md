@@ -69,7 +69,7 @@ While in central mode, mcrouter-hub can receives configuration or stats data fro
     curl -u 0b79bab50daca910b000d4f1a2b675d604257e42: https://localhost:5002/stats
     ```
 
-* **MCRHUB_CENTRAL_URLS:** URLs to mcrouter-hub central (Useful on agent mode only). Default: `""`
+* **MCRHUB_CENTRAL_URLS:** URLs to mcrouter-hub central. mcrouter-hub does not use persistent storage, therefore agents report to one or more central daemons (Useful on agent mode only). Default: `""`
 
 * **MCRHUB_REPORT_INTERVAL:** The frequency of agent reporting (Useful on agent mode only). Default: `"3s"`
 
