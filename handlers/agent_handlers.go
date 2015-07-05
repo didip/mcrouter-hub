@@ -5,12 +5,10 @@ import (
 	"errors"
 	"io/ioutil"
 	"net/http"
-	"os"
-	"strings"
 
 	"github.com/didip/mcrouter-hub/libhttp"
 	"github.com/didip/mcrouter-hub/models"
-	"github.com/fatih/structs"
+	"github.com/didip/mcrouter-hub/storage"
 	"github.com/gorilla/context"
 )
 
@@ -159,31 +157,15 @@ func AgentPostConfigPools(w http.ResponseWriter, r *http.Request) {
 func AgentGetStats(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	statsInterface := context.Get(r, "stats")
-	if statsInterface == nil {
+	store := context.Get(r, "store").(*storage.Storage)
+
+	payloadInterface := store.Get("statsPayload")
+	if payloadInterface == nil {
 		w.Write([]byte(`{}`))
 		return
 	}
 
-	stats := statsInterface.(*models.Stats)
-	payload := structs.Map(stats)
-
-	// Fetch the other stats data from file.
-	statsFromFileInterface := context.Get(r, "statsFromFile")
-
-	if statsFromFileInterface != nil {
-		statsFromFile := statsFromFileInterface.(map[string]interface{})
-
-		for key, value := range statsFromFile {
-			trimmedKey := strings.Replace(key, "libmcrouter.mcrouter.5000.", "", -1)
-			payload[trimmedKey] = value
-		}
-	}
-
-	hostname, err := os.Hostname()
-	if err == nil {
-		payload["hostname"] = hostname
-	}
+	payload := payloadInterface.(map[string]interface{})
 
 	payloadJson, err := json.Marshal(payload)
 	if err != nil {

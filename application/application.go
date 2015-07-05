@@ -176,6 +176,9 @@ func (app *Application) CollectData() error {
 				app.Storage.Set("statsFromFile", statsFromFile)
 			}
 
+			statsPayload := app.GetStats()
+			app.Storage.Set("statsPayload", statsPayload)
+
 			config, err := app.McRouterConfigManager.Config()
 			if err == nil && config != nil {
 				app.Storage.Set("config", config)
