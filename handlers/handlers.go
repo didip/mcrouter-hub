@@ -9,8 +9,20 @@ import (
 	"net/http"
 )
 
-func GetRoot(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte(`{
+func AgentGetRoot(w http.ResponseWriter, r *http.Request) {
+	readOnly := context.Get(r, "readOnly").(bool)
+	if readOnly {
+		w.Write([]byte(`{
+    paths: {
+        GET: [
+            "/config",
+            "/config/pools"
+        ]
+    }
+}`))
+
+	} else {
+		w.Write([]byte(`{
     paths: {
         GET: [
             "/config",
@@ -21,9 +33,11 @@ func GetRoot(w http.ResponseWriter, r *http.Request) {
         ]
     }
 }`))
+	}
+
 }
 
-func GetConfig(w http.ResponseWriter, r *http.Request) {
+func AgentGetConfig(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	mcRouterConfigFile := context.Get(r, "mcRouterConfigFile").(string)
@@ -48,7 +62,7 @@ func GetConfig(w http.ResponseWriter, r *http.Request) {
 	w.Write(mcRouterConfigJson)
 }
 
-func PostConfig(w http.ResponseWriter, r *http.Request) {
+func AgentPostConfig(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	mcRouterConfigFile := context.Get(r, "mcRouterConfigFile").(string)
@@ -79,7 +93,7 @@ func PostConfig(w http.ResponseWriter, r *http.Request) {
 	libhttp.HandleSuccessJson(w, "New config is saved successfully")
 }
 
-func GetConfigPools(w http.ResponseWriter, r *http.Request) {
+func AgentGetConfigPools(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	mcRouterConfigFile := context.Get(r, "mcRouterConfigFile").(string)
@@ -104,7 +118,7 @@ func GetConfigPools(w http.ResponseWriter, r *http.Request) {
 	w.Write(poolsJson)
 }
 
-func PostConfigPools(w http.ResponseWriter, r *http.Request) {
+func AgentPostConfigPools(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	mcRouterConfigFile := context.Get(r, "mcRouterConfigFile").(string)

@@ -5,12 +5,10 @@ import (
 )
 
 func TestCrud(t *testing.T) {
-	testData := `{"Free": 1000, "Used": 500}`
+	s := New()
+	s.Set("hi", "hello")
 
-	s := NewStorage()
-	s.Set("/free", []byte(testData))
-
-	if string(s.Get("/free")) != testData {
-		t.Errorf("Failed to test set and get. Actual Data: %v", string(s.Get("/free")))
+	if s.Get("hi").(string) != "hello" {
+		t.Errorf("Failed to test set and get. Actual Data: %v", s.Get("/free").(string))
 	}
 }

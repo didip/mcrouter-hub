@@ -3,6 +3,7 @@ package application
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"strings"
@@ -13,55 +14,127 @@ import (
 	"github.com/didip/mcrouter-hub/handlers"
 	"github.com/didip/mcrouter-hub/middlewares"
 	"github.com/didip/mcrouter-hub/models"
+	"github.com/didip/mcrouter-hub/payloads"
 	"github.com/didip/mcrouter-hub/storage"
 	"github.com/fatih/structs"
 	"github.com/gorilla/mux"
 )
 
-func New(readOnly bool, mcRouterConfigFile, mcRouterAddr, mcRouterHubCentralURL, nrInsightsURL, nrInsightsInsertKey string) (*Application, error) {
+func New() (*Application, error) {
 	app := &Application{}
-	app.ReadOnly = readOnly
-	app.McRouterAddr = mcRouterAddr
-	app.McRouterStatsManager = models.NewMcRouterStatsManager(mcRouterAddr)
-	app.McRouterHubCentralURL = mcRouterHubCentralURL
-	app.McRouterConfigFile = mcRouterConfigFile
-
-	configManager, err := models.NewMcRouterConfigManager(app.McRouterConfigFile)
-	if err != nil {
-		return nil, err
-	}
-	app.McRouterConfigManager = configManager
-
-	app.NrInsightsURL = nrInsightsURL
-	app.NrInsightsInsertKey = nrInsightsInsertKey
-
-	if app.ReportInterval == "" {
-		app.ReportInterval = "3s"
-	}
-
+	app.Settings = make(map[string]string)
 	app.Storage = storage.New()
+
+	for _, e := range os.Environ() {
+		pair := strings.Split(e, "=")
+		app.Settings[pair[0]] = pair[1]
+	}
+
+	if app.Settings["MCRHUB_MODE"] == "" {
+		app.Settings["MCRHUB_MODE"] = "agent"
+	}
+	if app.Settings["MCRHUB_MODE"] == "agent" && app.Settings["MCROUTER_ADDR"] == "" {
+		return nil, errors.New("MCROUTER_ADDR is required")
+	}
+	if app.Settings["MCRHUB_MODE"] == "agent" && app.Settings["MCROUTER_CONFIG_FILE"] == "" {
+		return nil, errors.New("MCROUTER_CONFIG_FILE is required")
+	}
+	if app.Settings["MCRHUB_MODE"] == "agent" && app.Settings["MCRHUB_READ_ONLY"] == "" {
+		app.Settings["MCRHUB_READ_ONLY"] = "true"
+	}
+	if app.Settings["MCRHUB_MODE"] == "central" && app.Settings["MCRHUB_READ_ONLY"] == "" {
+		app.Settings["MCRHUB_READ_ONLY"] = "false"
+	}
+	if app.Settings["MCRHUB_REPORT_INTERVAL"] == "" {
+		app.Settings["MCRHUB_REPORT_INTERVAL"] = "3s"
+	}
+	if app.Settings["MCRHUB_ADDR"] == "" {
+		if app.IsAgentMode() {
+			app.Settings["MCRHUB_ADDR"] = ":5001"
+		} else {
+			app.Settings["MCRHUB_ADDR"] = ":5002"
+		}
+	}
+
+	if app.IsAgentMode() {
+		app.McRouterStatsManager = models.NewMcRouterStatsManager(app.Settings["MCROUTER_ADDR"])
+
+		configManager, err := models.NewMcRouterConfigManager(app.Settings["MCROUTER_CONFIG_FILE"])
+		if err != nil {
+			return nil, err
+		}
+		app.McRouterConfigManager = configManager
+	}
 
 	return app, nil
 }
 
 type Application struct {
-	McRouterAddr          string
-	McRouterConfigFile    string
-	McRouterHubCentralURL string
+	Settings              map[string]string
 	McRouterStatsManager  *models.McRouterStatsManager
 	McRouterConfigManager *models.McRouterConfigManager
-	NrInsightsURL         string
-	NrInsightsInsertKey   string
-	ReportInterval        string
-	ReadOnly              bool
 	Storage               *storage.Storage
 }
 
-func (app *Application) IsCentral() bool {
-	return app.McRouterHubCentralURL == ""
+func (app *Application) SettingKeys() []string {
+	return []string{
+		"MCROUTER_ADDR",
+		"MCROUTER_CONFIG_FILE",
+		"MCRHUB_MODE",
+		"MCRHUB_READ_ONLY",
+		"MCRHUB_CENTRAL_URLS",
+		"MCRHUB_LOG_LEVEL",
+		"MCRHUB_REPORT_INTERVAL",
+		"MCRHUB_ADDR",
+		"MCRHUB_CERT_FILE",
+		"MCRHUB_KEY_FILE",
+		"NR_INSIGHTS_URL",
+		"NR_INSIGHTS_INSERT_KEY",
+	}
+}
+
+func (app *Application) IsReadOnly() bool {
+	if strings.ToLower(app.Settings["MCRHUB_READ_ONLY"]) == "false" {
+		return false
+	}
+	return true
+}
+
+func (app *Application) IsAgentMode() bool {
+	if strings.ToLower(app.Settings["MCRHUB_MODE"]) == "agent" {
+		return true
+	}
+	return false
+}
+
+func (app *Application) IsCentralMode() bool {
+	if strings.ToLower(app.Settings["MCRHUB_MODE"]) == "central" {
+		return true
+	}
+	return false
+}
+
+func (app *Application) CentralURLs() []string {
+	urls := make([]string, 0)
+
+	if app.Settings["MCRHUB_CENTRAL_URLS"] == "" {
+		return urls
+	}
+
+	urlParts := strings.Split(app.Settings["MCRHUB_CENTRAL_URLS"], ",")
+	for _, urlPart := range urlParts {
+		urlPartTrimmed := strings.TrimSpace(urlPart)
+		urls = append(urls, urlPartTrimmed)
+	}
+
+	return urls
 }
 
 func (app *Application) CollectData() error {
+	if !app.IsAgentMode() {
+		return nil
+	}
+
 	go func() {
 		for {
 			stats, err := app.McRouterStatsManager.Stats()
@@ -86,12 +159,12 @@ func (app *Application) CollectData() error {
 	return nil
 }
 
-func (app *Application) ReportToCentral() error {
-	if app.IsCentral() {
+func (app *Application) ReportConfigToCentral() error {
+	if !app.IsAgentMode() {
 		return nil
 	}
 
-	duration, err := time.ParseDuration(app.ReportInterval)
+	duration, err := time.ParseDuration(app.Settings["MCRHUB_REPORT_INTERVAL"])
 	if err != nil {
 		return err
 	}
@@ -103,61 +176,62 @@ func (app *Application) ReportToCentral() error {
 
 	client := &http.Client{}
 
-	url := app.McRouterHubCentralURL
-	if !strings.HasSuffix(url, "/central") {
-		url = url + "/central"
+	for _, url := range app.CentralURLs() {
+		if !strings.HasSuffix(url, "/configs") {
+			url = url + "/configs"
+		}
+
+		go func() {
+			for {
+				configInterface := app.Storage.Get("config")
+				if configInterface == nil {
+					time.Sleep(duration)
+					continue
+				}
+				config := configInterface.(map[string]interface{})
+
+				payload := &payloads.ReportConfigToCentralPayload{Hostname: hostname, Config: config}
+
+				payloadJson, err := json.Marshal(payload)
+
+				req, err := http.NewRequest("POST", url, bytes.NewReader(payloadJson))
+				if err != nil {
+					logrus.WithFields(logrus.Fields{
+						"Error": err.Error(),
+					}).Error("Failed to create HTTP request struct")
+
+					time.Sleep(duration)
+					continue
+				}
+
+				req.Header.Set("Content-Type", "application/json")
+
+				resp, err := client.Do(req)
+				if err != nil {
+					logrus.WithFields(logrus.Fields{
+						"Error": err.Error(),
+					}).Error("Failed to send HTTP request")
+
+					time.Sleep(duration)
+					continue
+				}
+
+				defer resp.Body.Close()
+
+				time.Sleep(duration)
+			}
+		}()
 	}
 
-	go func() {
-		for {
-			configInterface := app.Storage.Get("config")
-			if configInterface == nil {
-				time.Sleep(duration)
-				continue
-			}
-			config := configInterface.(map[string]interface{})
-
-			payload := &handlers.Payload{Hostname: hostname, Config: config}
-
-			payloadJson, err := json.Marshal(payload)
-
-			req, err := http.NewRequest("POST", url, bytes.NewReader(payloadJson))
-			if err != nil {
-				logrus.WithFields(logrus.Fields{
-					"Error": err.Error(),
-				}).Error("Failed to create HTTP request struct")
-
-				time.Sleep(duration)
-				continue
-			}
-
-			req.Header.Set("Content-Type", "application/json")
-
-			resp, err := client.Do(req)
-			if err != nil {
-				logrus.WithFields(logrus.Fields{
-					"Error": err.Error(),
-				}).Error("Failed to send HTTP request")
-
-				time.Sleep(duration)
-				continue
-			}
-
-			defer resp.Body.Close()
-
-			time.Sleep(duration)
-		}
-	}()
-
-	return err
+	return nil
 }
 
 func (app *Application) ReportToNewrelicInsights() error {
-	if app.NrInsightsInsertKey == "" {
+	if app.Settings["NR_INSIGHTS_URL"] == "" || app.Settings["NR_INSIGHTS_INSERT_KEY"] == "" {
 		return nil
 	}
 
-	duration, err := time.ParseDuration(app.ReportInterval)
+	duration, err := time.ParseDuration(app.Settings["MCRHUB_REPORT_INTERVAL"])
 	if err != nil {
 		return err
 	}
@@ -196,7 +270,7 @@ func (app *Application) ReportToNewrelicInsights() error {
 
 			payloadJson, err := json.Marshal(payload)
 
-			req, err := http.NewRequest("POST", app.NrInsightsURL, bytes.NewReader(payloadJson))
+			req, err := http.NewRequest("POST", app.Settings["NR_INSIGHTS_URL"], bytes.NewReader(payloadJson))
 			if err != nil {
 				logrus.WithFields(logrus.Fields{
 					"Error": err.Error(),
@@ -207,7 +281,7 @@ func (app *Application) ReportToNewrelicInsights() error {
 			}
 
 			req.Header.Set("Content-Type", "application/json")
-			req.Header.Set("X-Insert-Key", app.NrInsightsInsertKey)
+			req.Header.Set("X-Insert-Key", app.Settings["NR_INSIGHTS_INSERT_KEY"])
 
 			resp, err := client.Do(req)
 			if err != nil {
@@ -230,9 +304,9 @@ func (app *Application) ReportToNewrelicInsights() error {
 
 func (app *Application) MiddlewareStruct() (*interpose.Middleware, error) {
 	middle := interpose.New()
-	middle.Use(middlewares.SetMcRouterConfigFile(app.McRouterConfigFile))
+	middle.Use(middlewares.SetMcRouterConfigFile(app.Settings["MCROUTER_CONFIG_FILE"]))
 	middle.Use(middlewares.SetStorage(app.Storage))
-	middle.Use(middlewares.SetReadOnly(app.ReadOnly))
+	middle.Use(middlewares.SetReadOnly(app.IsReadOnly()))
 	middle.UseHandler(app.mux())
 
 	return middle, nil
@@ -240,27 +314,33 @@ func (app *Application) MiddlewareStruct() (*interpose.Middleware, error) {
 
 func (app *Application) mux() *mux.Router {
 	router := mux.NewRouter()
+	router = app.addAgentHandlers(router)
+	router = app.addCentralHandlers(router)
 
-	router.HandleFunc("/", handlers.GetRoot).Methods("GET")
-	router.HandleFunc("/config", handlers.GetConfig).Methods("GET")
-
-	router.HandleFunc("/config/pools", handlers.GetConfigPools).Methods("GET")
-
-	if app.IsCentral() {
-		router.HandleFunc("/central", handlers.GetCentral).Methods("GET")
-	}
-
-	return app.addWriteHandlers(router)
+	return router
 }
 
-func (app *Application) addWriteHandlers(router *mux.Router) *mux.Router {
-	if !app.ReadOnly {
-		router.HandleFunc("/config", handlers.PostConfig).Methods("POST")
+func (app *Application) addAgentHandlers(router *mux.Router) *mux.Router {
+	if app.IsAgentMode() {
+		router.HandleFunc("/", handlers.AgentGetRoot).Methods("GET")
+		router.HandleFunc("/config", handlers.AgentGetConfig).Methods("GET")
+		router.HandleFunc("/config/pools", handlers.AgentGetConfigPools).Methods("GET")
 
-		if app.IsCentral() {
-			router.HandleFunc("/central", handlers.PostCentral).Methods("POST")
+		if !app.IsReadOnly() {
+			router.HandleFunc("/config", handlers.AgentPostConfig).Methods("POST")
 		}
 	}
+	return router
+}
 
+func (app *Application) addCentralHandlers(router *mux.Router) *mux.Router {
+	if app.IsCentralMode() {
+		router.HandleFunc("/", handlers.CentralGetRoot).Methods("GET")
+		router.HandleFunc("/configs", handlers.CentralGetConfigs).Methods("GET")
+
+		if !app.IsReadOnly() {
+			router.HandleFunc("/configs", handlers.CentralPostConfigs).Methods("POST")
+		}
+	}
 	return router
 }
