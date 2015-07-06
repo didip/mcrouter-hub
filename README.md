@@ -71,10 +71,10 @@ While in central mode, mcrouter-hub can receives configuration or stats data fro
     -u 0b79bab50daca910b000d4f1a2b675d604257e42: https://localhost:5001/config
     ```
 
-* **MCRHUB_CENTRAL_URLS:** URLs to mcrouter-hub central. mcrouter-hub does not use persistent storage, therefore agents report to one or more central daemons (Useful on agent mode only). Default: `""`
+* **MCRHUB_CENTRAL_URLS:** URLs to mcrouter-hub central. mcrouter-hub does not use persistent storage, therefore agents report to one or more central daemons (agent mode only). Default: `""`
 
-* **MCRHUB_REPORT_INTERVAL:** The frequency of agent reporting (Useful on agent mode only). Default: `"3s"`
+* **MCRHUB_REPORT_INTERVAL:** The frequency of agent reporting (agent mode only). Default: `"3s"`
 
-* **NR_INSIGHTS_URL:** Newrelic Insights URL endpoint (Useful on agent mode only). Example: https://insights-collector.newrelic.com/v1/accounts/{AccountID}/events. Default: `""`
+* **NR_INSIGHTS_URL:** New Relic Insights URL endpoint (agent mode only). Example: https://insights-collector.newrelic.com/v1/accounts/{AccountID}/events. Default: `""`
 
-* **NR_INSIGHTS_INSERT_KEY:** Newrelic Insights insert key (Useful on agent mode only). Default: `""`
+* **NR_INSIGHTS_INSERT_KEY:** New Relic Insights insert key (agent mode only). Default: `""`
