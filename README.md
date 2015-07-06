@@ -66,13 +66,9 @@ While in central mode, mcrouter-hub can receives configuration or stats data fro
 * **MCRHUB_TOKENS_DIR:** Directory of token files. If it is not empty, each line on the file will be treated as one token. These tokens will be used for HTTP POST actions from agent to central. Tokens that exist on both sides are considered valid. Default: `""`
     ```
     # Token is passed as HTTP user. Example on updating config in agent mode:
-    curl -u 0b79bab50daca910b000d4f1a2b675d604257e42: https://localhost:5001/config
-
-    # Example on updating config in central mode:
-    curl -u 0b79bab50daca910b000d4f1a2b675d604257e42: https://localhost:5002/configs
-
-    # Example on updating stats in central mode:
-    curl -u 0b79bab50daca910b000d4f1a2b675d604257e42: https://localhost:5002/stats
+    curl -H "Content-Type: application/json" -X POST \
+    -d '{"the": "json config"}' \
+    -u 0b79bab50daca910b000d4f1a2b675d604257e42: https://localhost:5001/config
     ```
 
 * **MCRHUB_CENTRAL_URLS:** URLs to mcrouter-hub central. mcrouter-hub does not use persistent storage, therefore agents report to one or more central daemons (Useful on agent mode only). Default: `""`
