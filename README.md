@@ -13,6 +13,12 @@ It allows CRUD operation on McRouter config JSON as well as providing live stats
 
 ### Getting Started
 ```
+# Prerequisites:
+#   * It must be run on the same box where mcrouter is running.
+#   * netcat command line tool must be installed.
+#
+# MCRHUB_CENTRAL_URLS is only useful if you want to have central daemons. That setting is optional.
+#
 MCROUTER_ADDR=localhost:5000 \
 MCROUTER_CONFIG_FILE=./tests/mcrouter.json \
 MCRHUB_CENTRAL_URLS=http://localhost:5002 \
